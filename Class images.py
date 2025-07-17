@@ -1,47 +1,39 @@
 import os
-from pathlib import Path
-import shutil
 
-classes = [
-    "Tomato", "Carrot", "Cucumber", "Potato", "Radish"
-]
+base_dir = 'data'
+splits = ['train', 'test', 'validation']
 
-# Create mapping: class name → ID
-class_to_id = {cls: i for i, cls in enumerate(classes)}
+with open('classes.txt', 'r') as f:
+    class_names = [line.strip().lower() for line in f]
 
-# Save class names to file (optional)
-with open("classes.txt", "w") as f:
-    print('loop1')
-    for cls in classes:
-        print('loop2')
-        f.write(f"{cls}\n")
+class_map = {name: idx for idx, name in enumerate(class_names)}
 
-# For each data split
-for split in ['train', 'validation', 'test']:
-    print('loop3')
-    original_dir = Path(f"data/{split}")
-    image_dir = original_dir / "images"
-    label_dir = original_dir / "labels"
-    image_dir.mkdir(parents=True, exist_ok=True)
-    label_dir.mkdir(parents=True, exist_ok=True)
+def extract_class_from_filename(filename):
+    for name in class_names:
+        if name in filename.lower():
+            return class_map[name]
+    return None  
 
-    for class_folder in original_dir.iterdir():
-        print(f'🧺 Found class folder: {class_folder.name}')
-        if class_folder.is_dir() and class_folder.name not in ['images', 'labels']:
-            class_name = class_folder.name
-            class_id = class_to_id.get(class_name)
-            if class_id is None:
-                print(f"⚠️ Unknown class: {class_name}, skipping...")
+for split in splits:
+    label_dir = os.path.join(base_dir, split, 'labels')
+    for file in os.listdir(label_dir):
+        if file.endswith('.txt'):
+            file_path = os.path.join(label_dir, file)
+            true_class_id = extract_class_from_filename(file)
+            if true_class_id is None:
+                print(f"Skipping {file}, no class match found.")
                 continue
 
-            count = 0
-            for img_file in class_folder.glob("*.[jp][pn]g"):
-                new_img_path = image_dir / img_file.name
-                shutil.copy(img_file, new_img_path)
+            # Read and replace class IDs
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
 
-                label_file = label_dir / (img_file.stem + ".txt")
-                with open(label_file, "w") as f:
-                    f.write(f"{class_id} 0.5 0.5 1.0 1.0\n")
-                count += 1
+            new_lines = []
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) == 5:
+                    parts[0] = str(true_class_id)
+                    new_lines.append(' '.join(parts))
 
-            print(f"✅ Processed {count} images in {class_name}")
+            with open(file_path, 'w') as f:
+                f.write('\n'.join(new_lines))
